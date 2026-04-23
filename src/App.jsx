@@ -21,7 +21,7 @@ const useGameStore = create((set, get) => ({
   activeCounters: { poison: false, energy: false, tax: true, exp: false, rad: false },
   
   setupGame: (num) => {
-    const colors = ['#ff4b2b', '#0070ff', '#00e600', '#ffcc00', '#a200ff'];
+    const colors = ['#ff4b2b', '#0070ff', '#00e600', '#ffcc00'];
     const newPlayers = Array.from({ length: num }, (_, i) => ({
       id: i, life: 40, color: colors[i % colors.length],
       poison: 0, energy: 0, tax: 0, exp: 0, rad: 0,
@@ -91,37 +91,40 @@ const useGameStore = create((set, get) => ({
   exitGame: () => set({ players: [], gameStarted: false })
 }));
 
-// --- HYBRID INTERACTION ZONE ---
-const InteractiveZone = ({ onClick, onLongPress, side, children, style = {} }) => {
+// --- GHOST CLICK PROTECTION ENGINE ---
+const InteractiveZone = ({ onClick, onLongPress, children, style = {} }) => {
   const timerRef = useRef(null);
   const repeatRef = useRef(null);
   const isLongPress = useRef(false);
-  const touchStarted = useRef(false);
+  const lastTouchTime = useRef(0);
 
   const handleStart = (e) => {
-    if (e.type === 'touchstart') touchStarted.current = true;
-    // Prevent mouse event if touch already handled it
-    if (e.type === 'mousedown' && touchStarted.current) return;
+    // If it's a mouse event right after a touch, kill it (Ghost Click Shield)
+    if (e.type === 'mousedown' && Date.now() - lastTouchTime.current < 400) return;
+    if (e.type === 'touchstart') {
+        lastTouchTime.current = Date.now();
+    }
 
     isLongPress.current = false;
     timerRef.current = setTimeout(() => {
       isLongPress.current = true;
       if (onLongPress) {
         onLongPress();
-        repeatRef.current = setInterval(onLongPress, 500);
+        repeatRef.current = setInterval(onLongPress, 300);
       }
-    }, 800);
+    }, 600);
   };
 
   const handleEnd = (e) => {
+    if (e.type === 'touchend') {
+        e.preventDefault(); // Prevents simulated mouse events
+    }
     clearTimeout(timerRef.current);
     clearInterval(repeatRef.current);
     
     if (!isLongPress.current) {
       onClick();
     }
-    // Reset touch flag after a short delay
-    setTimeout(() => { touchStarted.current = false; }, 100);
   };
 
   return (
@@ -130,7 +133,7 @@ const InteractiveZone = ({ onClick, onLongPress, side, children, style = {} }) =
       onTouchEnd={handleEnd}
       onMouseDown={handleStart}
       onMouseUp={handleEnd}
-      style={{ ...style, WebkitTapHighlightColor: 'transparent', touchAction: 'none' }}
+      style={{ ...style, WebkitTapHighlightColor: 'transparent', touchAction: 'none', userSelect: 'none' }}
     >
       {children}
     </div>
@@ -207,19 +210,20 @@ const PlayerPanel = ({ player, totalPlayers, index, allPlayers, activeCounters, 
 
       {!player.isDead && (
         <>
-          <InteractiveZone side="left" onClick={() => updateStat(player.id, 'life', -1)} onLongPress={() => updateStat(player.id, 'life', -10)} style={{ position: 'absolute', left: 0, width: '50%', height: '100%', zIndex: 10 }} />
-          <InteractiveZone side="right" onClick={() => updateStat(player.id, 'life', 1)} onLongPress={() => updateStat(player.id, 'life', 10)} style={{ position: 'absolute', right: 0, width: '50%', height: '100%', zIndex: 10 }} />
+          <InteractiveZone onClick={() => updateStat(player.id, 'life', -1)} onLongPress={() => updateStat(player.id, 'life', -10)} style={{ position: 'absolute', left: 0, width: '50%', height: '100%', zIndex: 10 }} />
+          <InteractiveZone onClick={() => updateStat(player.id, 'life', 1)} onLongPress={() => updateStat(player.id, 'life', 10)} style={{ position: 'absolute', right: 0, width: '50%', height: '100%', zIndex: 10 }} />
         </>
       )}
 
       <div style={{ pointerEvents: 'none', textAlign: 'center', zIndex: 50, position: 'relative', width: '85%' }}>
         <AnimatePresence>
           {isMonarch && !player.isDead && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} style={bigCrownPos}>
+            <motion.div initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} style={bigCrownPos}>
+              {/* Added deeper shadow/aura for the crown */}
               <div style={monarchAura} />
-              <motion.div animate={{ y: [0, -15, 0] }} transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }} style={{ position: 'relative', width: 110, height: 110 }}>
-                <Crown size={110} color="#000" fill="none" strokeWidth={3} style={{ position: 'absolute', left: 0, top: 0 }} />
-                <Crown size={110} color="#ffd700" fill="rgba(184, 134, 11, 0.3)" strokeWidth={1.5} style={{ position: 'absolute', left: 0, top: 0 }} />
+              <motion.div animate={{ y: [0, -15, 0] }} transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }} style={{ position: 'relative', width: 110, height: 110, filter: 'drop-shadow(0 0 15px rgba(0,0,0,0.8))' }}>
+                <Crown size={110} color="#000" fill="none" strokeWidth={4} style={{ position: 'absolute', left: 0, top: 0 }} />
+                <Crown size={110} color="#ffd700" fill="rgba(255, 215, 0, 0.2)" strokeWidth={2} style={{ position: 'absolute', left: 0, top: 0 }} />
               </motion.div>
             </motion.div>
           )}
@@ -234,7 +238,23 @@ const PlayerPanel = ({ player, totalPlayers, index, allPlayers, activeCounters, 
           ) : (
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <AnimatePresence>
-                {delta !== 0 && <motion.div key="delta" initial={{ opacity: 0, y: 0 }} animate={{ opacity: 1, y: -70 }} exit={{ opacity: 0 }} style={{ ...deltaStyle, color: delta > 0 ? '#4ade80' : '#ff4d4d' }}>{delta > 0 ? `+${delta}` : delta}</motion.div>}
+                {/* Enhanced Outlines for Delta (+/-) text */}
+                {delta !== 0 && (
+                    <motion.div 
+                        key="delta" 
+                        initial={{ opacity: 0, y: 0 }} 
+                        animate={{ opacity: 1, y: -70 }} 
+                        exit={{ opacity: 0 }} 
+                        style={{ 
+                            ...deltaStyle, 
+                            color: delta > 0 ? '#4ade80' : '#ff4d4d',
+                            WebkitTextStroke: '4px black', // Thicker outline
+                            textShadow: '0 0 10px rgba(0,0,0,0.8)'
+                        }}
+                    >
+                        {delta > 0 ? `+${delta}` : delta}
+                    </motion.div>
+                )}
               </AnimatePresence>
               <div style={lifeStyle}>{player.life}</div>
             </div>
@@ -276,8 +296,8 @@ const CounterButton = ({ icon, value, onClick }) => (
 );
 
 // --- STYLES ---
-const bigCrownPos = { position: 'absolute', top: '-105px', left: '50%', transform: 'translateX(-50%)', zIndex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' };
-const monarchAura = { position: 'absolute', width: '160px', height: '140px', background: 'radial-gradient(circle, rgba(0,0,0,0.35) 0%, transparent 70%)', pointerEvents: 'none' };
+const bigCrownPos = { position: 'absolute', top: '-115px', left: '50%', transform: 'translateX(-50%)', zIndex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' };
+const monarchAura = { position: 'absolute', width: '200px', height: '180px', background: 'radial-gradient(circle, rgba(0,0,0,0.6) 0%, transparent 75%)', pointerEvents: 'none' };
 const cmdTrayStyle = { position: 'absolute', right: 0, top: 0, bottom: 0, width: '165px', background: 'rgba(0,0,0,0.95)', zIndex: 150, borderLeft: '1px solid #333', display: 'flex', flexDirection: 'column', gap: '8px', padding: '15px' };
 const cmdHeaderStyle = { fontSize: '9px', fontWeight: 'bold', color: '#666', textAlign: 'center', textTransform: 'uppercase' };
 const cmdRowStyle = { display: 'flex', alignItems: 'center', background: '#1a1a1a', padding: '10px', borderRadius: '12px', gap: '8px' };
@@ -285,15 +305,15 @@ const cmdBtn = { background: '#333', color: '#fff', borderRadius: '6px', width: 
 const cmdToggleStyle = { position: 'absolute', right: '10px', bottom: '10px', zIndex: 60, background: 'rgba(0,0,0,0.7)', border: '1px solid #444', color: '#fff', borderRadius: '50%', width: '48px', height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center' };
 const monarchBtnStyle = { position: 'absolute', right: '10px', top: '10px', zIndex: 60, border: '1px solid #444', borderRadius: '50%', width: '48px', height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center' };
 const lifeStyle = { fontSize: 'min(30vw, 150px)', fontWeight: '900', color: '#fff', fontStyle: 'italic' };
-const deltaStyle = { position: 'absolute', width: '100%', textAlign: 'center', fontSize: '65px', fontWeight: '900', fontStyle: 'italic', zIndex: 60, WebkitTextStroke: '2.5px black', textShadow: '0 4px 15px rgba(0,0,0,0.5)' };
+const deltaStyle = { position: 'absolute', width: '100%', textAlign: 'center', fontSize: '65px', fontWeight: '900', fontStyle: 'italic', zIndex: 60 };
 const quoteStyle = { fontSize: '18px', fontWeight: '700', color: '#fff', fontStyle: 'italic', marginBottom: '20px', textAlign: 'center' };
 const reviveBtnStyle = { padding: '12px 24px', background: '#fff', color: '#000', border: 'none', borderRadius: '12px', fontWeight: '900', marginTop: '15px', display: 'flex', alignItems: 'center', gap: '8px' };
 const countersBarStyle = { position: 'absolute', bottom: '20px', display: 'flex', gap: '6px', zIndex: 60, left: '50%', transform: 'translateX(-50%)' };
-const cntContainer = { display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(0,0,0,0.8)', padding: '6px 12px', borderRadius: '12px', border: '1px solid #333', color: '#fff', fontWeight: '900' };
+const cntContainer = { display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(0,0,0,0.85)', padding: '6px 12px', borderRadius: '12px', border: '1px solid #333', color: '#fff', fontWeight: '900' };
 const cntStep = { color: '#fff', fontSize: '24px', padding: '0 8px', display: 'flex', alignItems: 'center' };
 const taxBtn = { color: '#fff', fontSize: '24px', display: 'flex', alignItems: 'center' };
 const taxWrapper = { position: 'absolute', top: '20px', left: '20px' };
-const taxOrbStyle = { display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(0,0,0,0.7)', padding: '5px 12px', borderRadius: '20px', border: '1px solid #facc1533' };
+const taxOrbStyle = { display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(0,0,0,0.8)', padding: '5px 12px', borderRadius: '20px', border: '1px solid #facc1533' };
 const deathBtnStyle = { position: 'absolute', bottom: '10px', left: '10px', width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(0,0,0,0.3)', border: '1px solid #444', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' };
 const startingPulseStyle = { position: 'absolute', inset: 0, background: '#fff', zIndex: 200, pointerEvents: 'none' };
 const colorDot = { width: '8px', height: '8px', borderRadius: '50%' };
@@ -303,18 +323,22 @@ export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
+    // Fits any device screen and prevents bouncing/scrolling
     document.documentElement.style.height = '100dvh';
+    document.documentElement.style.overflow = 'hidden';
     document.body.style.height = '100dvh';
     document.body.style.margin = '0';
+    document.body.style.padding = '0';
     document.body.style.overflow = 'hidden';
     document.body.style.position = 'fixed';
-    document.body.style.width = '100%';
+    document.body.style.width = '100vw';
+    document.body.style.backgroundColor = '#000';
   }, []);
 
   if (!gameStarted) {
     return (
       <div style={{ height: '100dvh', width: '100vw', background: '#000', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontFamily: 'system-ui' }}>
-        <h1 style={{ fontSize: '12vw', fontWeight: '900', fontStyle: 'italic', marginBottom: '40px' }}>MTG NEXUS</h1>
+        <h1 style={{ fontSize: '10vw', fontWeight: '900', fontStyle: 'italic', marginBottom: '40px', letterSpacing: '-2px' }}>MTG NEXUS</h1>
         <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', justifyContent: 'center' }}>
           {[2, 3, 4].map(n => <InteractiveZone key={n} onClick={() => setupGame(n)} style={{ padding: '20px 30px', background: '#111', border: '1px solid #333', color: '#fff', borderRadius: '15px', fontWeight: '900', fontSize: '18px' }}>{n} PLAYERS</InteractiveZone>)}
         </div>
@@ -323,15 +347,26 @@ export default function App() {
   }
 
   return (
-    <div style={{ height: '100dvh', width: '100vw', background: '#000', display: 'grid', gridTemplateColumns: players.length === 2 ? '1fr' : '1fr 1fr', gridTemplateRows: players.length === 2 ? '1fr 1fr' : `repeat(${Math.ceil(players.length / 2)}, 1fr)`, touchAction: 'none', overflow: 'hidden' }}>
+    <div style={{ 
+        height: '100dvh', 
+        width: '100vw', 
+        background: '#000', 
+        display: 'grid', 
+        // Force the grid to fit the viewport exactly
+        gridTemplateColumns: players.length === 2 ? '1fr' : '1fr 1fr', 
+        gridTemplateRows: players.length === 2 ? '1fr 1fr' : `repeat(${Math.ceil(players.length / 2)}, 1fr)`,
+        touchAction: 'none', 
+        overflow: 'hidden',
+        boxSizing: 'border-box'
+    }}>
       {players.map((p, i) => (
-        <div key={p.id} style={{ gridColumn: (players.length === 3 && i === 2) ? '1 / span 2' : 'auto' }}>
+        <div key={p.id} style={{ gridColumn: (players.length === 3 && i === 2) ? '1 / span 2' : 'auto', height: '100%', width: '100%' }}>
           <PlayerPanel player={p} totalPlayers={players.length} index={i} allPlayers={players} activeCounters={activeCounters} monarchEnabled={monarchEnabled} monarchId={monarchId} highlightedId={highlightedId} />
         </div>
       ))}
       <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 1000, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         {menuOpen && (
-          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} style={{ background: '#000', border: '1px solid #444', padding: '15px', borderRadius: '24px', marginBottom: '10px', width: '220px' }}>
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} style={{ background: '#000', border: '1px solid #444', padding: '15px', borderRadius: '24px', marginBottom: '10px', width: '220px', boxShadow: '0 10px 30px rgba(0,0,0,0.8)' }}>
             <InteractiveZone onClick={rollStartPlayer} style={{ width: '100%', marginBottom: '8px', padding: '12px', background: '#3b82f6', color: '#fff', borderRadius: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
               <Dices size={18}/> ROLL START
             </InteractiveZone>
@@ -346,7 +381,7 @@ export default function App() {
             <InteractiveZone onClick={() => { if(confirm('Exit Game?')) exitGame(); }} style={{ width: '100%', marginTop: '12px', padding: '12px', background: '#ff4d4d', color: '#fff', borderRadius: '10px', fontWeight: 'bold', textAlign: 'center' }}>EXIT</InteractiveZone>
           </motion.div>
         )}
-        <InteractiveZone onClick={() => setMenuOpen(!menuOpen)} style={{ background: '#000', border: '2px solid #555', width: '60px', height: '60px', borderRadius: '50%', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Settings2 size={28}/></InteractiveZone>
+        <InteractiveZone onClick={() => setMenuOpen(!menuOpen)} style={{ background: '#000', border: '2px solid #555', width: '60px', height: '60px', borderRadius: '50%', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 20px rgba(0,0,0,0.5)' }}><Settings2 size={28}/></InteractiveZone>
       </div>
     </div>
   );
