@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { create } from 'zustand';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Skull, Zap, Settings2, Ghost, RefreshCw, Biohazard, ShieldAlert, Star, Swords, ChevronRight, Crown, Dices } from 'lucide-react';
+import { Skull, Zap, Settings2, Ghost, RefreshCw, Biohazard, ShieldAlert, Star, Swords, ChevronRight, Crown, Dices, RotateCw, Unlock } from 'lucide-react';
 
 // --- QUOTES ---
 const QUOTES = {
@@ -91,7 +91,6 @@ const useGameStore = create((set, get) => ({
   exitGame: () => set({ players: [], gameStarted: false })
 }));
 
-// --- GHOST CLICK PROTECTION ENGINE ---
 const InteractiveZone = ({ onClick, onLongPress, children, style = {} }) => {
   const timerRef = useRef(null);
   const repeatRef = useRef(null);
@@ -99,11 +98,8 @@ const InteractiveZone = ({ onClick, onLongPress, children, style = {} }) => {
   const lastTouchTime = useRef(0);
 
   const handleStart = (e) => {
-    // If it's a mouse event right after a touch, kill it (Ghost Click Shield)
     if (e.type === 'mousedown' && Date.now() - lastTouchTime.current < 400) return;
-    if (e.type === 'touchstart') {
-        lastTouchTime.current = Date.now();
-    }
+    if (e.type === 'touchstart') lastTouchTime.current = Date.now();
 
     isLongPress.current = false;
     timerRef.current = setTimeout(() => {
@@ -116,25 +112,15 @@ const InteractiveZone = ({ onClick, onLongPress, children, style = {} }) => {
   };
 
   const handleEnd = (e) => {
-    if (e.type === 'touchend') {
-        e.preventDefault(); // Prevents simulated mouse events
-    }
+    if (e.type === 'touchend') e.preventDefault();
     clearTimeout(timerRef.current);
     clearInterval(repeatRef.current);
-    
-    if (!isLongPress.current) {
-      onClick();
-    }
+    if (!isLongPress.current) onClick();
   };
 
   return (
-    <div 
-      onTouchStart={handleStart} 
-      onTouchEnd={handleEnd}
-      onMouseDown={handleStart}
-      onMouseUp={handleEnd}
-      style={{ ...style, WebkitTapHighlightColor: 'transparent', touchAction: 'none', userSelect: 'none' }}
-    >
+    <div onTouchStart={handleStart} onTouchEnd={handleEnd} onMouseDown={handleStart} onMouseUp={handleEnd}
+      style={{ ...style, WebkitTapHighlightColor: 'transparent', touchAction: 'none', userSelect: 'none' }}>
       {children}
     </div>
   );
@@ -175,9 +161,7 @@ const PlayerPanel = ({ player, totalPlayers, index, allPlayers, activeCounters, 
       transform: isTopRow ? 'rotate(180deg)' : 'none',
       transition: 'background-color 0.8s ease'
     }}>
-      <AnimatePresence>
-        {isBeingHighlighted && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 0.7 }} exit={{ opacity: 0 }} style={startingPulseStyle} />}
-      </AnimatePresence>
+      <AnimatePresence>{isBeingHighlighted && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 0.7 }} exit={{ opacity: 0 }} style={startingPulseStyle} />}</AnimatePresence>
 
       <motion.div animate={{ x: showCmd ? 0 : '100%' }} style={cmdTrayStyle}>
         <div style={cmdHeaderStyle}>DEALT BY ME</div>
@@ -193,11 +177,7 @@ const PlayerPanel = ({ player, totalPlayers, index, allPlayers, activeCounters, 
         ))}
       </motion.div>
 
-      {!player.isDead && (
-        <InteractiveZone onClick={() => setShowCmd(!showCmd)} style={cmdToggleStyle}>
-          {showCmd ? <ChevronRight size={24} /> : <Swords size={22} />}
-        </InteractiveZone>
-      )}
+      {!player.isDead && <InteractiveZone onClick={() => setShowCmd(!showCmd)} style={cmdToggleStyle}>{showCmd ? <ChevronRight size={24} /> : <Swords size={22} />}</InteractiveZone>}
 
       {monarchEnabled && !player.isDead && (
         <InteractiveZone onClick={() => setMonarch(player.id)} style={{ ...monarchBtnStyle, background: isMonarch ? '#ffd700' : 'rgba(0,0,0,0.4)' }}>
@@ -219,7 +199,6 @@ const PlayerPanel = ({ player, totalPlayers, index, allPlayers, activeCounters, 
         <AnimatePresence>
           {isMonarch && !player.isDead && (
             <motion.div initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} style={bigCrownPos}>
-              {/* Added deeper shadow/aura for the crown */}
               <div style={monarchAura} />
               <motion.div animate={{ y: [0, -15, 0] }} transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }} style={{ position: 'relative', width: 110, height: 110, filter: 'drop-shadow(0 0 15px rgba(0,0,0,0.8))' }}>
                 <Crown size={110} color="#000" fill="none" strokeWidth={4} style={{ position: 'absolute', left: 0, top: 0 }} />
@@ -238,20 +217,9 @@ const PlayerPanel = ({ player, totalPlayers, index, allPlayers, activeCounters, 
           ) : (
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <AnimatePresence>
-                {/* Enhanced Outlines for Delta (+/-) text */}
                 {delta !== 0 && (
-                    <motion.div 
-                        key="delta" 
-                        initial={{ opacity: 0, y: 0 }} 
-                        animate={{ opacity: 1, y: -70 }} 
-                        exit={{ opacity: 0 }} 
-                        style={{ 
-                            ...deltaStyle, 
-                            color: delta > 0 ? '#4ade80' : '#ff4d4d',
-                            WebkitTextStroke: '4px black', // Thicker outline
-                            textShadow: '0 0 10px rgba(0,0,0,0.8)'
-                        }}
-                    >
+                    <motion.div key="delta" initial={{ opacity: 0, y: 0 }} animate={{ opacity: 1, y: -70 }} exit={{ opacity: 0 }} 
+                        style={{ ...deltaStyle, color: delta > 0 ? '#4ade80' : '#ff4d4d', WebkitTextStroke: '4px black', textShadow: '0 0 10px rgba(0,0,0,0.8)' }}>
                         {delta > 0 ? `+${delta}` : delta}
                     </motion.div>
                 )}
@@ -302,7 +270,8 @@ const cmdTrayStyle = { position: 'absolute', right: 0, top: 0, bottom: 0, width:
 const cmdHeaderStyle = { fontSize: '9px', fontWeight: 'bold', color: '#666', textAlign: 'center', textTransform: 'uppercase' };
 const cmdRowStyle = { display: 'flex', alignItems: 'center', background: '#1a1a1a', padding: '10px', borderRadius: '12px', gap: '8px' };
 const cmdBtn = { background: '#333', color: '#fff', borderRadius: '6px', width: '36px', height: '36px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center' };
-const cmdToggleStyle = { position: 'absolute', right: '10px', bottom: '10px', zIndex: 60, background: 'rgba(0,0,0,0.7)', border: '1px solid #444', color: '#fff', borderRadius: '50%', width: '48px', height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center' };
+// Elevated Z-Index here to ensure it's clickable above the drawer
+const cmdToggleStyle = { position: 'absolute', right: '10px', bottom: '10px', zIndex: 200, background: 'rgba(0,0,0,0.7)', border: '1px solid #444', color: '#fff', borderRadius: '50%', width: '48px', height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center' };
 const monarchBtnStyle = { position: 'absolute', right: '10px', top: '10px', zIndex: 60, border: '1px solid #444', borderRadius: '50%', width: '48px', height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center' };
 const lifeStyle = { fontSize: 'min(30vw, 150px)', fontWeight: '900', color: '#fff', fontStyle: 'italic' };
 const deltaStyle = { position: 'absolute', width: '100%', textAlign: 'center', fontSize: '65px', fontWeight: '900', fontStyle: 'italic', zIndex: 60 };
@@ -321,9 +290,10 @@ const colorDot = { width: '8px', height: '8px', borderRadius: '50%' };
 export default function App() {
   const { gameStarted, players, setupGame, exitGame, activeCounters, toggleCounterType, monarchEnabled, toggleMonarchFeature, rollStartPlayer, monarchId, highlightedId } = useGameStore();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isPortrait, setIsPortrait] = useState(window.innerHeight > window.innerWidth);
+  const [bypassRotation, setBypassRotation] = useState(false);
 
   useEffect(() => {
-    // Fits any device screen and prevents bouncing/scrolling
     document.documentElement.style.height = '100dvh';
     document.documentElement.style.overflow = 'hidden';
     document.body.style.height = '100dvh';
@@ -333,7 +303,28 @@ export default function App() {
     document.body.style.position = 'fixed';
     document.body.style.width = '100vw';
     document.body.style.backgroundColor = '#000';
+
+    const handleResize = () => setIsPortrait(window.innerHeight > window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  const needsLandscape = gameStarted && players.length > 2 && !bypassRotation;
+
+  if (needsLandscape && isPortrait) {
+    return (
+      <div style={{ height: '100dvh', width: '100vw', background: '#000', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '20px', zIndex: 9999 }}>
+        <motion.div animate={{ rotate: 90 }} transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}>
+          <RotateCw size={60} color="#ffd700" />
+        </motion.div>
+        <h2 style={{ fontFamily: 'system-ui', fontWeight: '900', fontStyle: 'italic', textAlign: 'center', padding: '0 40px' }}>PLEASE ROTATE DEVICE FOR 3+ PLAYERS</h2>
+        <InteractiveZone onClick={() => setBypassRotation(true)} style={{ position: 'absolute', bottom: '40px', padding: '10px 20px', background: '#222', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '12px', color: '#666', border: '1px solid #333' }}>
+          <Unlock size={14} /> I ALREADY HAVE (BYPASS)
+        </InteractiveZone>
+      </div>
+    );
+  }
 
   if (!gameStarted) {
     return (
@@ -352,33 +343,33 @@ export default function App() {
         width: '100vw', 
         background: '#000', 
         display: 'grid', 
-        // Force the grid to fit the viewport exactly
-        gridTemplateColumns: players.length === 2 ? '1fr' : '1fr 1fr', 
-        gridTemplateRows: players.length === 2 ? '1fr 1fr' : `repeat(${Math.ceil(players.length / 2)}, 1fr)`,
+        gridTemplateColumns: (players.length === 2 || (isPortrait && players.length > 2)) ? '1fr' : '1fr 1fr', 
+        gridTemplateRows: players.length === 2 ? '1fr 1fr' : (isPortrait ? `repeat(${players.length}, 1fr)` : `repeat(${Math.ceil(players.length / 2)}, 1fr)`),
         touchAction: 'none', 
-        overflow: 'hidden',
-        boxSizing: 'border-box'
+        overflow: 'hidden', 
+        boxSizing: 'border-box' 
     }}>
       {players.map((p, i) => (
-        <div key={p.id} style={{ gridColumn: (players.length === 3 && i === 2) ? '1 / span 2' : 'auto', height: '100%', width: '100%' }}>
+        <div key={p.id} style={{ gridColumn: (players.length === 3 && i === 2 && !isPortrait) ? '1 / span 2' : 'auto', height: '100%', width: '100%' }}>
           <PlayerPanel player={p} totalPlayers={players.length} index={i} allPlayers={players} activeCounters={activeCounters} monarchEnabled={monarchEnabled} monarchId={monarchId} highlightedId={highlightedId} />
         </div>
       ))}
+      
+      {/* MENU ALIGNMENT FIXES APPLIED BELOW */}
       <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 1000, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         {menuOpen && (
-          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} style={{ background: '#000', border: '1px solid #444', padding: '15px', borderRadius: '24px', marginBottom: '10px', width: '220px', boxShadow: '0 10px 30px rgba(0,0,0,0.8)' }}>
-            <InteractiveZone onClick={rollStartPlayer} style={{ width: '100%', marginBottom: '8px', padding: '12px', background: '#3b82f6', color: '#fff', borderRadius: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-              <Dices size={18}/> ROLL START
-            </InteractiveZone>
-            <InteractiveZone onClick={toggleMonarchFeature} style={{ width: '100%', marginBottom: '12px', padding: '12px', background: monarchEnabled ? '#ffd700' : '#222', color: monarchEnabled ? '#000' : '#fff', borderRadius: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-              <Crown size={18} fill={monarchEnabled ? '#000' : 'none'} /> MONARCH: {monarchEnabled ? 'ON' : 'OFF'}
-            </InteractiveZone>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} style={{ background: '#000', border: '1px solid #444', padding: '15px', borderRadius: '24px', marginBottom: '10px', width: '220px', boxShadow: '0 10px 30px rgba(0,0,0,0.8)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <InteractiveZone onClick={rollStartPlayer} style={{ width: '100%', padding: '12px', background: '#3b82f6', color: '#fff', borderRadius: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}><Dices size={18}/> ROLL START</InteractiveZone>
+            <InteractiveZone onClick={toggleMonarchFeature} style={{ width: '100%', padding: '12px', background: monarchEnabled ? '#ffd700' : '#222', color: monarchEnabled ? '#000' : '#fff', borderRadius: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}><Crown size={18} fill={monarchEnabled ? '#000' : 'none'} /> MONARCH: {monarchEnabled ? 'ON' : 'OFF'}</InteractiveZone>
+            
+            {/* Counter Grid Fixed Alignment */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', width: '100%' }}>
               {Object.keys(activeCounters).map(k => (
-                <InteractiveZone key={k} onClick={() => toggleCounterType(k)} style={{ padding: '10px', background: activeCounters[k] ? '#fff' : '#222', color: activeCounters[k] ? '#000' : '#fff', borderRadius: '10px', fontSize: '11px', fontWeight: 'bold', textAlign: 'center' }}>{k.toUpperCase()}</InteractiveZone>
+                <InteractiveZone key={k} onClick={() => toggleCounterType(k)} style={{ padding: '10px 5px', background: activeCounters[k] ? '#fff' : '#222', color: activeCounters[k] ? '#000' : '#fff', borderRadius: '10px', fontSize: '10px', fontWeight: '900', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{k.toUpperCase()}</InteractiveZone>
               ))}
             </div>
-            <InteractiveZone onClick={() => { if(confirm('Exit Game?')) exitGame(); }} style={{ width: '100%', marginTop: '12px', padding: '12px', background: '#ff4d4d', color: '#fff', borderRadius: '10px', fontWeight: 'bold', textAlign: 'center' }}>EXIT</InteractiveZone>
+            
+            <InteractiveZone onClick={() => { if(confirm('Exit Game?')) { exitGame(); setBypassRotation(false); } }} style={{ width: '100%', padding: '12px', background: '#ff4d4d', color: '#fff', borderRadius: '10px', fontWeight: 'bold', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>EXIT</InteractiveZone>
           </motion.div>
         )}
         <InteractiveZone onClick={() => setMenuOpen(!menuOpen)} style={{ background: '#000', border: '2px solid #555', width: '60px', height: '60px', borderRadius: '50%', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 20px rgba(0,0,0,0.5)' }}><Settings2 size={28}/></InteractiveZone>
